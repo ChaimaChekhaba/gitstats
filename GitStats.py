@@ -4,8 +4,6 @@ import os
 import re
 import pandas
 
-# TODO
-# Adding the number of xml and all files added updated, renamed and removed
 
 # commit dataframe columns
 commits_columns = ['commit_hash_key', 'Author', 'Date', 'Comment']
