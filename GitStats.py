@@ -24,7 +24,7 @@ def get_cloc(awk_result):
 
 
 class GitStats:
-    def __init__(self, repo_name, result_file):
+    def __init__(self, repo_name):
         # repo_name: the git repo to analyze
         self.repo_name = repo_name
         # dataframe of commits
