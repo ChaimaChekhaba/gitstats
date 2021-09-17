@@ -26,6 +26,8 @@ def get_cloc(awk_result):
 class GitStats:
     def __init__(self, repo_name):
         # repo_name: the git repo to analyze
+        if repo_name.endswith('/'):
+            repo_name = repo_name[:-1]
         self.repo_name = repo_name
         # dataframe of commits
         self.df_commits = []
@@ -50,10 +52,10 @@ class GitStats:
                         commit_info.remove('')
 
                     for info in commit_info:
-                        if info.__contains__('Author'):
+                        if info.__contains__('Author:'):
                             author = info.split('Author:')[1]
                         else:
-                            if info.__contains__('Date'):
+                            if info.__contains__('Date:'):
                                 date = info.split('Date:')[1]
                             else:
                                 comment = info
