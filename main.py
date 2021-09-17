@@ -11,4 +11,4 @@ def run(repo_name, result_file):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    run('/home/chaima/Phd/JournalPaper/QualitativeStudy/apps-done/GracefulMovies', 'hello.csv')
+    run('/home/chaima/Phd/JournalPaper/QualitativeStudy/apps-done/ThirtyInch', 'hello.csv')
