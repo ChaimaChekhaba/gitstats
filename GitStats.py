@@ -128,8 +128,9 @@ class GitStats:
 
         # get the last commit from the repo
         master = self.df_commits.iloc[[0], [0]].values.tolist()[0][0]
-        r = subprocess.getoutput('git tag')
+        r = subprocess.getoutput('git tag --sort=-creatordate')
         tags = re.split('\n', r)
+        tags = list(reversed(tags))
         data = []
         i = 0
         for tag in tags:
