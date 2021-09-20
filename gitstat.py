@@ -5,7 +5,7 @@ import sys
 
 
 def run(repo_name):
-    GitStats(repo_name).compute_stats()
+    return GitStats(repo_name).compute_stats()
 
 
 if __name__ == '__main__':
@@ -24,4 +24,5 @@ if __name__ == '__main__':
         print('The path specified does not exist')
         sys.exit()
 
-    run(input_path)
+    result = run(input_path)
+    print(f'Result in {result}')

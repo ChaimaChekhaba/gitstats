@@ -151,3 +151,4 @@ class GitStats:
 
         self.df_tags = pandas.DataFrame(data, columns=tags_columns)
         self.df_tags.to_csv(f'{self.repo_name}-gitstat.csv', index=False)
+        return self.repo_name+'-gitstat.csv'
