@@ -4,7 +4,6 @@ import os
 import re
 import pandas
 
-
 # commit dataframe columns
 commits_columns = ['commit_hash_key', 'Author', 'Date', 'Comment']
 
@@ -21,6 +20,64 @@ def get_cloc(awk_result):
     data = io.StringIO(awk_result)
     df = pandas.read_csv(data, sep="\t", names=['added', 'removed', 'file'])
     return df['added'].sum(), df['removed'].sum()
+
+
+# compute the stats between two commits
+def compute_stats_between_two_commits(sha1, sha2):
+    nb_files = subprocess.getoutput(f'git ls-tree --name-status -r {sha2} | wc -l')
+    nb_xml_files = subprocess.getoutput(f'git ls-tree --name-status -r {sha2} '
+                                        f'| grep "/res/layout" | grep ".xml" | wc -l')
+    nb_java_files = subprocess.getoutput(f'git ls-tree --name-status -r {sha2} '
+                                         f'| grep ".java" | grep -v "Test.java" | wc -l')
+    nb_release_date = subprocess.getoutput(f'git show -s --format=%ci {sha2}')
+    nb_added_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^A" | wc -l ')
+    nb_changed_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^C" | wc -l ')
+    nb_renamed_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^R" | wc -l ')
+    nb_deleted_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^D" | wc -l ')
+    nb_unchanged_files = subprocess.getoutput(f'git diff --name-only {sha1}..{sha2} >> changed.txt &&'
+                                              f' git ls-files >> all.txt &&'
+                                              f' comm --nocheck-order -23 all.txt changed.txt >> unchanged.txt'
+                                              f' &&  wc -l < unchanged.txt')
+    subprocess.getstatusoutput(f'rm -f all.txt changed.txt unchanged.txt')
+    nb_added_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^A" | '
+                                              f'grep ".xml" | wc -l ')
+    nb_changed_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^C" | '
+                                                f'grep ".xml" | wc -l ')
+    nb_renamed_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^R" |'
+                                                f'grep ".xml" | wc -l ')
+    nb_deleted_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^D" | '
+                                                f'grep ".xml" | wc -l ')
+    nb_unchanged_xml_files = subprocess.getoutput(f'git diff --name-only {sha1}..{sha2} >> changed.txt &&'
+                                                  f' git ls-files >> all.txt && comm --nocheck-order '
+                                                  f'-23 all.txt changed.txt >> unchanged.txt'
+                                                  f' && grep ".xml" unchanged.txt | wc -l')
+    subprocess.getstatusoutput(f'rm -f all.txt changed.txt unchanged.txt')
+    nb_added_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^A" | '
+                                               f'grep ".java" | grep -v "Test.java" | wc -l ')
+    nb_changed_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^C" | '
+                                                 f'grep ".java" | grep -v "Test.java" | wc -l ')
+    nb_renamed_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^R" |'
+                                                 f'grep ".java" | grep -v "Test.java" | wc -l ')
+    nb_deleted_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^D" | '
+                                                 f'grep ".java" | grep -v "Test.java" | wc -l ')
+    nb_unchanged_java_files = subprocess.getoutput(f'git diff --name-only {sha1}..{sha2} >> changed.txt &&'
+                                                   f' git ls-files >> all.txt && comm --nocheck-order '
+                                                   f'-23 all.txt changed.txt >> unchanged.txt && '
+                                                   f' grep ".java" unchanged.txt | grep -v "Test.java" | wc -l')
+    subprocess.getstatusoutput(f'rm -f all.txt changed.txt unchanged.txt')
+    nb_contributors = subprocess.getoutput(f'git log --pretty=format:"%an" {sha1}..{sha2}| sort | uniq | wc -l')
+    changed_files = subprocess.getoutput(f'git log --numstat --pretty=\"%H\" {sha1}..{sha2} | grep ".java" '
+                                         f'| grep -v "Test.java"')
+    # point the head of the git log on the sha2 commit to retore the state of all the files
+    subprocess.getstatusoutput(f'git reset --hard {sha2}')
+    nb_loc = subprocess.getoutput(f'git ls-files | grep ".java" | grep -v "Test.java" | xargs cat | wc -l')
+    nb_cloc = get_cloc(changed_files)
+
+    return [nb_contributors, nb_release_date, nb_loc, nb_cloc, nb_files, nb_xml_files, nb_java_files,
+            nb_added_files, nb_changed_files, nb_renamed_files, nb_deleted_files, nb_unchanged_files,
+            nb_added_xml_files, nb_changed_xml_files, nb_renamed_xml_files, nb_deleted_xml_files,
+            nb_unchanged_xml_files, nb_added_java_files, nb_changed_java_files, nb_renamed_java_files,
+            nb_deleted_java_files, nb_unchanged_java_files]
 
 
 class GitStats:
@@ -68,6 +125,9 @@ class GitStats:
                     row = []
 
         self.df_commits = pandas.DataFrame(data, columns=commits_columns)
+
+        # get the last commit from the repo
+        master = self.df_commits.iloc[[0], [0]].values.tolist()[0][0]
         r = subprocess.getoutput('git tag')
         tags = re.split('\n', r)
         data = []
@@ -75,66 +135,18 @@ class GitStats:
         for tag in tags:
             # get the commit which a tag is pointing to
             sha2 = subprocess.getoutput(f'git rev-list -n 1 {tag}')
-            nb_files = subprocess.getoutput(f'git ls-tree --name-status -r {sha2} | wc -l')
-            nb_xml_files = subprocess.getoutput(f'git ls-tree --name-status -r {sha2} '
-                                                f'| grep "/res/layout" | grep ".xml" | wc -l')
-            nb_java_files = subprocess.getoutput(f'git ls-tree --name-status -r {sha2} '
-                                                 f'| grep ".java" | grep -v "Test.java" | wc -l')
-            nb_release_date = subprocess.getoutput(f'git show -s --format=%ci {sha2}')
+
             if i == 0:  # the first tag, we need to use the first commit in the repo
                 sha1 = self.df_commits.iloc[[-1], [0]].values.tolist()[0][0]
-                first_commit = sha1
 
-            nb_added_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^A" | wc -l ')
-            nb_changed_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^C" | wc -l ')
-            nb_renamed_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^R" | wc -l ')
-            nb_deleted_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^D" | wc -l ')
-            nb_unchanged_files = subprocess.getoutput(f'git diff --name-only {sha1}..{sha2} >> changed.txt &&'
-                                                      f' git ls-files >> all.txt &&'
-                                                      f' comm --nocheck-order -23 all.txt changed.txt >> unchanged.txt'
-                                                      f' &&  wc -l < unchanged.txt')
-            subprocess.getstatusoutput(f'rm -f all.txt changed.txt unchanged.txt')
-            nb_added_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^A" | '
-                                                      f'grep ".xml" | wc -l ')
-            nb_changed_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^C" | '
-                                                        f'grep ".xml" | wc -l ')
-            nb_renamed_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^R" |'
-                                                        f'grep ".xml" | wc -l ')
-            nb_deleted_xml_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^D" | '
-                                                        f'grep ".xml" | wc -l ')
-            nb_unchanged_xml_files = subprocess.getoutput(f'git diff --name-only {sha1}..{sha2} >> changed.txt &&'
-                                                          f' git ls-files >> all.txt && comm --nocheck-order '
-                                                          f'-23 all.txt changed.txt >> unchanged.txt'
-                                                          f' && grep ".xml" unchanged.txt | wc -l')
-            subprocess.getstatusoutput(f'rm -f all.txt changed.txt unchanged.txt')
-            nb_added_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^A" | '
-                                                       f'grep ".java" | grep -v "Test.java" | wc -l ')
-            nb_changed_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^C" | '
-                                                         f'grep ".java" | grep -v "Test.java" | wc -l ')
-            nb_renamed_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^R" |'
-                                                         f'grep ".java" | grep -v "Test.java" | wc -l ')
-            nb_deleted_java_files = subprocess.getoutput(f'git diff --name-status {sha1}..{sha2} | grep "^D" | '
-                                                         f'grep ".java" | grep -v "Test.java" | wc -l ')
-            nb_unchanged_java_files = subprocess.getoutput(f'git diff --name-only {sha1}..{sha2} >> changed.txt &&'
-                                                           f' git ls-files >> all.txt && comm --nocheck-order '
-                                                           f'-23 all.txt changed.txt >> unchanged.txt && '
-                                                           f' grep ".java" unchanged.txt | grep -v "Test.java" | wc -l')
-            subprocess.getstatusoutput(f'rm -f all.txt changed.txt unchanged.txt')
-            nb_contributors = subprocess.getoutput(f'git log --pretty=format:"%an" {sha1}..{sha2}| sort | uniq | wc -l')
-            changed_files = subprocess.getoutput(f'git log --numstat --pretty=\"%H\" {sha1}..{sha2} | grep ".java" '
-                                                 f'| grep -v "Test.java"')
-            # point the head of the git log on the sha2 commit to retore the state of all the files
-            subprocess.getstatusoutput(f'git reset --hard {sha2}')
-            nb_loc = subprocess.getoutput(f'git ls-files | grep ".java" | grep -v "Test.java" | xargs cat | wc -l')
+            data.append([tag] + compute_stats_between_two_commits(sha1, sha2))
             # redo the reset of the repo to point to the last commit
-            subprocess.getstatusoutput(f'git reset --hard {first_commit}')
-            nb_cloc = get_cloc(changed_files)
+            subprocess.getstatusoutput(f'git reset --hard {master}')
             sha1 = sha2
             i += 1
-            data.append([tag, nb_contributors, nb_release_date, nb_loc, nb_cloc, nb_files, nb_xml_files, nb_java_files,
-                         nb_added_files, nb_changed_files, nb_renamed_files, nb_deleted_files, nb_unchanged_files,
-                         nb_added_xml_files, nb_changed_xml_files, nb_renamed_xml_files, nb_deleted_xml_files,
-                         nb_unchanged_xml_files, nb_added_java_files, nb_changed_java_files, nb_renamed_java_files,
-                         nb_deleted_java_files, nb_unchanged_java_files])
+
+        if sha2 != master:
+            data.append(['master'] + compute_stats_between_two_commits(sha2, master))
+
         self.df_tags = pandas.DataFrame(data, columns=tags_columns)
         self.df_tags.to_csv(f'{self.repo_name}-gitstat.csv', index=False)
