@@ -2,6 +2,8 @@ from GitStats import GitStats
 import argparse
 import os
 import sys
+# TO-DO: i should add the special case when the app does not have any tags at all
+# TO-DO: i should also change the path name of the app to the git url
 
 
 def run(repo_name):
